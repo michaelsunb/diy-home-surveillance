@@ -15,6 +15,7 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+CURRENT_PATH=${PWD}
 
 maxdiff=5 #maximum percentage of change allowed between pictures to confirm there has been no movement or people passing by
 mtimer=10
@@ -22,21 +23,32 @@ fswebcam -r 640x480 --jpeg 85 1.jpg #take the first control picture with fswebca
 while [ true ]
 do
 	sleep $mtimer #time interval between security checks, in seconds
-	fswebcam -r 640x480 --jpeg 85 2.jpg #take a comparison picture with fswebcam
-	res=$(./imagecompare 2.jpg 1.jpg) #save the return value of imagecompare to make a comparison
-	if [ "$maxdiff" -le "$res" ] #condition to trigger the security measures
+	fswebcam -d /dev/video0 -r 640x480 --jpeg 85 white2.jpg #take a comparison picture with fswebcam
+	fswebcam -d /dev/video1 -r 640x480 --jpeg 85 blue2.jpg #take a comparison picture with fswebcam
+	white_res=$(./imagecompare white2.jpg white1.jpg) #save the return value of imagecompare to make a comparison
+	blue_res=$(./imagecompare blue2.jpg blue1.jpg) #save the return value of imagecompare to make a comparison
+	if [ "$maxdiff" -le "$white_res" ] || [ "$maxdiff" -le "$blue_res" ]
 	then
-		FILENAME=$(date +%Y-%m-%d_%H.%M.%S).png
-		mv 2.jpg $FILENAME
+		FILENAME_WHITE=$(date +%Y-%m-%d_%H.%M.%S).png
+		FILENAME_BLUE=$(date +%Y-%m-%d_%H.%M.%S).png
+		mv white2.jpg $FILENAME_WHITE
 		curl  \
-			-F 'recipient={"id":"USER_ID"}' \
-			-F 'message={"attachment":{"type":"image", "payload":{}}}' \
-			-F 'filedata=$FILENAME;type=image/png' \
-			"https://graph.facebook.com/v2.6/me/messages?access_token=PAGE_ACCESS_TOKEN"
-		./dropbox-uploader/dropbox_uploader.sh upload $FILENAME ./
+		  -F 'recipient={"id":""}' \
+		  -F 'message={"attachment":{"type":"image", "payload":{}}}' \
+		  -F "filedata=@$FILENAME_WHITE;type=image/png" \
+		  "https://graph.facebook.com/v2.6/me/messages?access_token="
+		./dropbox-uploader/dropbox_uploader.sh upload $FILENAME_WHITE ./
+		mv blue2.jpg $FILENAME_BLUE
+		curl  \
+		  -F 'recipient={"id":""}' \
+		  -F 'message={"attachment":{"type":"image", "payload":{}}}' \
+		  -F "filedata=@$FILENAME_BLUE;type=image/png" \
+		  "https://graph.facebook.com/v2.6/me/messages?access_token="
+		./dropbox-uploader/dropbox_uploader.sh upload $FILENAME_BLUE ./
 		mtimer=3
 	else
-		mv 2.jpg 1.jpg #if nothing particular happened according to the algorithm, replace the control picture with the second photo to minimize difference in long time
+		mv white2.jpg white1.jpg
+		mv blue2.jpg blue1.jpg
 		mtimer=10
 	fi
 done
